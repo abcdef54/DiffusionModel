@@ -16,9 +16,29 @@ def clear_terminal():
     else:
         system('clear')
 
+def take_integer_input(input_string: str = '') -> int:
+   try:
+       in_put = int(input(input_string))
+       return in_put
+   except ValueError:
+       print("Invalid input. Please enter a valid integer.")
+       return take_integer_input(input_string)
+   except KeyboardInterrupt:
+       input("\nOperation cancelled.")
+       return 0
+
+def get_transform_strings(dataset_name: str) -> List[str]:
+    transform_map = {
+        'MNIST': ['ToTensor()', 'Normalize((0.1307,), (0.3081,))'],
+        'CIFAR10': ['ToTensor()', 'Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010))'],
+        'CIFAR100': ['ToTensor()', 'Normalize((0.5071, 0.4867, 0.4408), (0.2675, 0.2565, 0.2761))'],
+        'CelebA': ['CenterCrop(178)', 'Resize(64)', 'ToTensor()', 'Normalize((0.5063, 0.4258, 0.3832), (0.2669, 0.2414, 0.2397))']
+    }
+    return transform_map.get(dataset_name, ['ToTensor()'])
+
 def make_transformation() -> Tuple[torchvision.transforms.Compose, List[str]]:
     transformations = []
-    transform_strings = ['ToTensor()', 'Normalize((0.5,),(0.5))']
+    transform_strings = ['ToTensor()', 'Normalize((0.1307,), (0.3081,))']
     choice: int
     while True:
         print('NOTE: Once you have choosen a dataset it will override the default transform and will use that transform from now on.')
@@ -30,7 +50,7 @@ def make_transformation() -> Tuple[torchvision.transforms.Compose, List[str]]:
         print('6. See current transforms')
         print('7. Set to default transform')
         print('0. Exist')
-        choice = int(input('Choice: '))
+        choice = take_integer_input('Choice: ')
 
         match choice:
             case 1:
@@ -56,15 +76,12 @@ def make_transformation() -> Tuple[torchvision.transforms.Compose, List[str]]:
                     print(transform + ',')
                 print('])')
             case 7:
-                print('Default transforms:\n' \
+                print('Default transforms (For MNIST):\n' \
                 'transform.Compose([\n' \
                 'ToTensor(),\n' \
-                'Normalize((0.5,),(0.5,))\n' \
+                'Normalize((0.1307,), (0.3081,))\n' \
                 '])')
-                return transforms.Compose([
-                    transforms.ToTensor(),
-                    transforms.Normalize((0.5,), (0.5))
-                ]), transform_strings
+                return config.MNIST_TRANSFORM, transform_strings
             case 0:
                 break
             case _:
@@ -72,33 +89,47 @@ def make_transformation() -> Tuple[torchvision.transforms.Compose, List[str]]:
     return transforms.Compose([*transformations]), transform_strings
 
 
-def choose_dataset() -> str:
+def choose_dataset() -> Tuple[str, List[str]]:
     datasets_list = ['MNIST', 'CIFAR10', 'CIFAR100', 'CelebA']
-    print('''
-        NOTE: Once you have choosen a dataset it will override the default dataset (which is MNIST) and will use that dataset from now on.
-        Available datasets:
-        1. MNIST
-        2. CIFAR10
-        3. CIFAR100
-        4. CelebA
-        0. Exist
-            ''')
-    choice = int(input('Choice: '))
-    if choice == 0:
-        print(f'Current dataset: {config.CURRENT_DATASET}')
-    if choice == 1:
-        config.TRAIN_DATASET, config.TEST_DATASET, config.IN_CHANNELS, config.H, config.W = src.datasets.download_MNIST(transformation=config.TRANSFORMATIONS)
-    if choice == 2:
-        config.TRAIN_DATASET, config.TEST_DATASET, config.IN_CHANNELS, config.H, config.W = src.datasets.download_CIFAR10(transformation=config.TRANSFORMATIONS)
-    if choice == 3:
-        config.TRAIN_DATASET, config.TEST_DATASET, config.IN_CHANNELS, config.H, config.W = src.datasets.download_CIFAR100(transformation=config.TRANSFORMATIONS)
-    if choice == 4:
-        config.TRAIN_DATASET, config.TEST_DATASET, config.IN_CHANNELS, config.H, config.W = src.datasets.download_CelebA(transformation=config.TRANSFORMATIONS)
-    else:
-        print(f'Invalid choice: {choice}')
+    while True:
+        clear_terminal()
+        print(f'''
+NOTE: Once you have choosen a dataset it will override the current dataset (which is {config.CURRENT_DATASET}) and will use that dataset from now on.
+NOTE: The appropriate transformation for each dataset is automatically set every time you choose a dataset
+      so you don't need to remake the transformation using option 5 in the main menu.
+      Unless you want to create your custom transformation.
+
+Current dataset: {config.CURRENT_DATASET}
+Available datasets:
+1. MNIST
+2. CIFAR10
+3. CIFAR100
+4. CelebA
+0. Exist
+                ''')
+        choice = take_integer_input('Choice: ')
+        if choice == 0:
+            input(f'Current dataset: {config.CURRENT_DATASET}')
+            break
+        elif choice == 1:
+            config.TRAIN_DATASET, config.TEST_DATASET, config.IN_CHANNELS, config.H, config.W = src.datasets.download_MNIST(transformation=config.CUSTOM_TRANSFORMATION)
+            transform_strings = get_transform_strings('MNIST')
+        elif choice == 2:
+            config.TRAIN_DATASET, config.TEST_DATASET, config.IN_CHANNELS, config.H, config.W = src.datasets.download_CIFAR10(transformation=config.CUSTOM_TRANSFORMATION)
+            transform_strings = get_transform_strings('CIFAR10')
+        elif choice == 3:
+            config.TRAIN_DATASET, config.TEST_DATASET, config.IN_CHANNELS, config.H, config.W = src.datasets.download_CIFAR100(transformation=config.CUSTOM_TRANSFORMATION)
+            transform_strings = get_transform_strings('CIFAR100')
+        elif choice == 4:
+            config.TRAIN_DATASET, config.TEST_DATASET, config.IN_CHANNELS, config.H, config.W = src.datasets.download_CelebA(transformation=config.CUSTOM_TRANSFORMATION)
+            transform_strings = get_transform_strings('CelebA')
+        else:
+            print(f'Invalid choice: {choice}')
+            input(f'Current dataset: {config.CURRENT_DATASET}')
+        
         input(f'Current dataset: {config.CURRENT_DATASET}')
 
-    return datasets_list[choice]
+    return datasets_list[choice], transform_strings
 
 def set_hyperparameters():
     while True:
@@ -110,7 +141,7 @@ def set_hyperparameters():
         print('6. Drop Rate')
         print('7. Res Block')
         print('0. Exist')
-        choice: int = int(input('Choice: '))
+        choice: int = take_integer_input('Choice: ')
 
         match choice:
             case 1:
@@ -139,6 +170,32 @@ def set_hyperparameters():
             case _:
                 input(f'Invalid choice: {choice} please choose again')
 
+def set_device():
+    while True:
+        print('1. CPU')
+        print('2. CUDA')
+        print('3. MPS')
+        print('0. Exist')
+        device = take_integer_input('Choose: ')
+
+        if device == 1:
+            update_config_device(torch.device('cpu'))
+            input('Device is set to: CPU')
+        elif device == 2:
+            if torch.cuda.is_available():
+                update_config_device(torch.device('cuda'))
+            else:
+                input(f'Device: "cuda" is not available on your machine please choose a different one')
+        elif device == 3:
+            if torch.mps.is_available():
+                update_config_device(torch.device('mps'))
+            else:
+                input(f'Device: "mps" is not available on your machine please choose a different one')
+        elif device == 0:
+            break
+        else:
+            input(f'Invalid choice: {device} please choose again.')
+
 def update_config_device(device: torch.device):
     config.DEVICE = device
     config.betas = config.betas.to(config.DEVICE)
@@ -156,15 +213,20 @@ def print_hyperparameters(header: bool = True):
     print(f'Res block: {config.NUM_RES_BLOCK}')
     print(f'Training device: {config.DEVICE}')
 
-def print_dir(directory: str | Path, header: str = ''):
+def print_dir(directory: str | Path, suffixes: str | List[str] | None = None, header: str = ''):
     print(f'-------------------------------------------------------{header}-------------------------------------------------------')
     files = list(utils.list_files_pathlib(directory))
+    files_with_suffixes = []
+    
+    if suffixes is not None and isinstance(suffixes, list):
+        for suffix in suffixes:
+            files_with_suffixes.extend([file for file in files if file.endswith(suffix)])
 
-    for i, file in enumerate(files):
+    for i, file in enumerate(files_with_suffixes):
         print(f'{i}. {file}')
     
     print(f'----------------------------------------------------------------------------------------------------------------------')
-    return files
+    return files_with_suffixes
 
 def show_context():
     """Display comprehensive context about the diffusion model program"""
@@ -286,11 +348,18 @@ def main_loop() -> None:
     opti = torch.optim.Adam(model.parameters(), lr=config.LR)
     name: str
     suffix: str
-    full_model_path: Path 
-    dataset_name: str = config.CURRENT_DATASET
+    full_model_path: Path = None # type: ignore
     checkpoint: str
-    transform_strings: List[str]  = ['ToTensor()', 'Normalize((0.5,),(0.5))']
+    transform_strings: List[str]  = ['ToTensor()', 'Normalize((0.1307,), (0.3081,))']
     loss_dict = None
+
+    not_allow = [
+                '<', '>', ':', '"', '/', '\\', '|', '?', '*',  # Windows forbidden characters
+                '#', '%', '&', '{', '}', '$', '!', "'", '`',   # Commonly problematic in URLs and scripts
+                '@', '+', '=', '[', ']', ';', ',', '^', '~',   # Additional special characters
+                ' '  # Space character
+                ]
+    
 
     while True:
         clear_terminal()
@@ -305,12 +374,16 @@ def main_loop() -> None:
         print('8. Change device')
         print('9. Set Hyperparameters')
         print('10. Get Context')
+        print('11. New Model')
         print('0. Exist')
-        choice = int(input('Choice: '))
+        choice = take_integer_input('Choice: ')
 
         match choice:
             case 1:
                 model_name = input('Model name (without suffix): ')
+                if not model_name or any(char in model_name for char in not_allow):
+                    input(f'Model name is empty or contains not allowed characters: {model_name}\nOnly special characters allowed are: \"-\", \"_\"')
+
                 full_model_path = config.MODEL_PATH / model_name
                 checkpoint: str = input('Checkpoint save (Y/N): ')
                 print_hyperparameters()
@@ -325,20 +398,42 @@ def main_loop() -> None:
 
                 input('Press enter to continue.')
             case 2:
-                n_images: int = int(input('Number of images to generate: '))
+                n_images: int = take_integer_input('Number of images to generate: ')
+                if n_images <= 0:
+                    input('Please enter a number bigger than 0')
+                    continue
                 generated_images = diffusion.inference(model, n_images)
 
                 figname = input('Image name for saving: ')
+                if not figname or any(char in figname for char in not_allow):
+                    input(f'Image name is empty or contains not allowed characters: {figname}\nOnly special characters allowed are: \"-\", \"_\"')
                 
                 steps: int = int(input('Progress image step (default 1): ')) 
                 utils.show_grid(generated_images, 'Generated Image From Diffusion Model', savefig=True, show=False, figname=figname, steps=steps)
                 utils.show_final_image(generated_images, 'Generated Image From Diffusion Model', savefig=True, show=True, figname=figname)
                 input()
             case 3:
-                clear_terminal()
-                files = print_dir(config.MODEL_PATH, header='Available-Models')
+                while True:
+                    clear_terminal()
+                    files = print_dir(config.MODEL_PATH, header='Available-Models', suffixes=['.pth', '.pt'])
+                    
+                    print('Enter "-1" to exist.')
+                    try:
+                        index = int(input('Enter the index of the chosen model (0, 1, 2): '))
+                    except ValueError:
+                        input("Invalid input. Please enter a valid integer.")
+                        continue
+                    except KeyboardInterrupt:
+                        input("\nOperation cancelled.")
+                        index = -1
 
-                index = int(input('Enter the index of the chosen model (0, 1, 2): '))
+                    if index == -1:
+                        break
+                    elif index < -1 or index >= len(files):
+                        input(f'Index out of bound: {index}')
+                        continue
+                    else:
+                        break
 
                 model_path = config.MODEL_PATH / files[index]
                 model = utils.load_model(model_path)
@@ -347,20 +442,26 @@ def main_loop() -> None:
 
                 input(f'Successfully loaded model at: {model_path}')
             case 4:
-                dataset_name = choose_dataset()
-                input(f'Current dataset: {dataset_name}')
+                dataset_name, transform_strings = choose_dataset()
             case 5:
-                config.TRANSFORMATIONS, transform_strings = make_transformation()
+                input(f'Feature not implemented')
+                # config.CUSTOM_TRANSFORMATION, transform_strings = make_transformation()
             case 6:
                 name = input('Model name: ')
+                if not name or any(char in name for char in not_allow):
+                    input(f'Model name is empty or contains not allowed characters: {name}\nOnly special characters allowed are: \"-\", \"_\"')
+
                 suffix = input('Suffix (.pth or .pt): ')
+                if not suffix or suffix not in ['.pth', '.pt']:
+                    input(f'Invalid suffix: {suffix}, please enter ".pth" or .pt"')
 
                 full_model_path = utils.save_model(model, name, suffix=suffix)
                 input(f'Saved model at: {full_model_path}')
+
             case 7:
                 print('-------------------------------------------------------Current-Config-------------------------------------------------------')
-                print(f'Model path: {full_model_path if "full_model_name" in locals() else "Not set"}')
-                print(f'Dataset: {dataset_name}')
+                print(f'Model path: {full_model_path}')
+                print(f'Dataset: {config.CURRENT_DATASET}')
                 print(f'Current transforms: ')
                 print('transform.Compose([')
                 for transform in transform_strings:
@@ -370,32 +471,29 @@ def main_loop() -> None:
                 input()
                 
             case 8:
-                print('1. CPU')
-                print('2. CUDA')
-                print('3. MPS')
-                device = int(input('Choose: '))
-
-                if device == 1:
-                    update_config_device(torch.device('cpu'))
-                    input('Device is set to: CPU')
-                if device == 2:
-                    if torch.cuda.is_available():
-                        update_config_device(torch.device('cuda'))
-                    else:
-                        input(f'Device: "cuda" is not available on your machine please choose a different one')
-                if device == 3:
-                    if torch.mps.is_available():
-                        update_config_device(torch.device('mps'))
-                    else:
-                        input(f'Device: "mps" is not available on your machine please choose a different one')
+                set_device()
             case 9:
                 set_hyperparameters()
             case 10:
                 show_context()
+            case 11:
+                full_model_path: Path = None # type: ignore
+                model: torch.nn.Module = modified_Unet.Model(config.model_config).to(config.DEVICE)
+                opti = torch.optim.Adam(model.parameters(), lr=config.LR)
+                print('Successfully recreated a new model')
+                print(f'Model path: {full_model_path if "full_model_path" in locals() else "Not set"}')
+                print(f'Dataset: {config.CURRENT_DATASET}')
+                print(f'Current transforms: ')
+                print('transform.Compose([')
+                for transform in transform_strings:
+                    print('\t' + transform + ',')
+                print('])')
+                print_hyperparameters(header=False)
+                input()
             case 0:
                 break
             case _:
-                input(f'Invalid choice: {choice} please choose again')
+                input(f'Invalid choice: "{choice}", please choose again')
 
 if __name__ == '__main__':
     main_loop()
