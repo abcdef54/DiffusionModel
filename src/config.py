@@ -40,9 +40,33 @@ T: int = 50
 LR: float = 2e-4
 NUM_RES_BLOCK: int = 2
 
-TRANSFORMATIONS = transforms.Compose([
+CURRENT_TRANSFORMATIONS = transforms.Compose([
     transforms.ToTensor(),
-    transforms.Normalize((0.5,), (0.5))
+    transforms.Normalize((0.1307,), (0.3081,))
+])
+
+CUSTOM_TRANSFORMATION = None
+
+MNIST_TRANSFORM = transformation = transforms.Compose([
+    transforms.ToTensor(),
+    transforms.Normalize((0.1307,), (0.3081,))
+])
+CIFAR10_TRANSFORM = transforms.Compose([
+    transforms.ToTensor(),
+    transforms.Normalize((0.4914, 0.4822, 0.4465),
+                         (0.2023, 0.1994, 0.2010))
+])
+CIFAR100_TRANSFORM = cifar100_transform = transforms.Compose([
+    transforms.ToTensor(),
+    transforms.Normalize((0.5071, 0.4867, 0.4408),
+                         (0.2675, 0.2565, 0.2761))
+])
+CELEBA_TRANSFORM = transforms.Compose([
+    transforms.CenterCrop(178),
+    transforms.Resize(64),
+    transforms.ToTensor(),
+    transforms.Normalize((0.5063, 0.4258, 0.3832),
+                         (0.2669, 0.2414, 0.2397))
 ])
 
 # Dataset configuration - will be set dynamically when dataset is loaded - default to MNIST dataset
@@ -50,12 +74,12 @@ TRAIN_DATASET: torch.utils.data.Dataset = torchvision.datasets.MNIST(
         root=DATA_PATH,
         train=True,
         download=True,
-        transform=TRANSFORMATIONS
+        transform=MNIST_TRANSFORM
     )
 TEST_DATASET: torch.utils.data.Dataset = torchvision.datasets.MNIST(
     root=DATA_PATH,
     train=False,
-    transform=TRANSFORMATIONS,
+    transform=MNIST_TRANSFORM,
     download=True
 )
 
