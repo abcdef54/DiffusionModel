@@ -36,7 +36,12 @@ pip install -r requirements.txt
 ```bash
 mkdir -p data models output
 ```
+## Test Reconstructed Images
+![alt text](output/clear/testingg.png)
 
+![alt text](output/clear/haha.png)
+
+![alt text](output/grid/asodhasd_1.png)
 ## Usage
 
 ### Quick Start
@@ -96,7 +101,6 @@ DiffusionModel/
 ├── models/                   # Saved model checkpoints
 ├── output/                   # Generated images
 ├── data/                     # Downloaded datasets
-├── tests/                    # Test functions to check if the program still runs correctly
 ├── requirements.txt          # Python dependencies
 └── README.md                # This file
 ```
