@@ -177,9 +177,9 @@ def inference(model: torch.nn.Module, n_samples: int) -> ...:
             sigma_t = config.sigmas[t]
             
             # Reshape coefficients for broadcasting with (n_samples, C, H, W)
-            alpha_t = alpha_t.view(1, 1, 1, 1).to(config.DEVICE)
-            alpha_bar_t = alpha_bar_t.view(1, 1, 1, 1).to(config.DEVICE)
-            sigma_t = sigma_t.view(1, 1, 1, 1).to(config.DEVICE)
+            alpha_t = alpha_t.view(1, 1, 1, 1)
+            alpha_bar_t = alpha_bar_t.view(1, 1, 1, 1)
+            sigma_t = sigma_t.view(1, 1, 1, 1)
 
             # Reverse diffusion step MATH
             # x_t-1 = (1 / sqrt(alpha_t)) * (x_t - (1 - alpha_t) / (sqrt(1 - alpha_bar_t)) * epsilon_theta(x_t, t)) + sigma_t * z
