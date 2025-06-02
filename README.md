@@ -39,9 +39,9 @@ mkdir -p data models output
 ## Test Reconstructed Images
 ![alt text](output/clear/testingg.png)
 
-![alt text](output/clear/haha.png)
+![output/clear/abc.png](output/clear/abc.png)
 
-![alt text](output/grid/asodhasd_1.png)
+![output/grid/testtt_2.png](output/grid/testtt_2.png)
 ## Usage
 
 ### Quick Start
