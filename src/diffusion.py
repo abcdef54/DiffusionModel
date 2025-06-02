@@ -1,101 +1,151 @@
 import torch
 from tqdm import tqdm
-from typing import List, Tuple
+from typing import List, Tuple, Dict
 from . import config, utils
 import time
+import numpy as np
 
 
 def train(model: torch.nn.Module,
           train_data_loader: torch.utils.data.DataLoader,
           test_data_loader: torch.utils.data.DataLoader,
-          n_epochs: int, optimizer: torch.optim.Optimizer,
+          n_epochs: int,
+          optimizer: torch.optim.Optimizer,
           logging_steps: int,
           model_name: str = '',
           checkpoint: bool = True,
           suffix: str = '.pth',
           valid: bool = True,
-          valid_interval: int = 1) -> Tuple[List[float], List[float]]:
+          valid_interval: int = 1) -> Dict[str, List[float]]:
 
     model = model.to(config.DEVICE)
 
-    train_losses = []
-    val_losses = []
+    train_loss_batch = []
+    val_loss_batch = []
+    train_loss_epoch = []
+    val_loss_epoch = []
 
-    train_loss = 0.0
-    start = time.time()
+    
     for epoch in tqdm(range(n_epochs)):
-        model.train()
-        for batch_idx, (x_0,_) in enumerate(train_data_loader):
-            x_0 = x_0.to(config.DEVICE)
-            B = x_0.shape[0] # Batch size
+        start = time.time()
+        train_step_losses = train_step(model, train_data_loader, optimizer, logging_steps)
+        # Store loss of each batch
+        train_loss_batch.extend(train_step_losses)
+        # Store mean loss of each epoch
+        train_loss_epoch.append(np.mean(train_step_losses))
 
-            # Sample t ~ Uniform(0, T-1)
-            t: torch.Tensor = torch.randint(0, config.T, (B,)).to(config.DEVICE) # Sample a total amount of 'B' 'T's
-            # Sample noise vector e ~ N(0, I)
-            eps: torch.Tensor = torch.randn_like(x_0).to(config.DEVICE)
-            # Calculate x_t
-            x_0_coef = torch.sqrt(config.alpha_bars[t]).view(-1,1,1,1)
-            eps_coef = torch.sqrt(1 - config.alpha_bars[t]).view(-1,1,1,1)
-
-            x_t = x_0_coef*x_0 + eps*eps_coef # Forward diffusion
-            # eps theta
-            # Reverse diffusion - predict the noise
-            eps_theta = model(x_t, t)
-            # Calculate MSE loss
-            loss = torch.mean((eps - eps_theta)**2)
-            
-            # Gradient descent to update model params
-            optimizer.zero_grad()
-            loss.backward()
-            optimizer.step()
-
-            train_losses.append(loss.item())
-            train_loss += loss.item()
-
-            if (batch_idx + 1) % logging_steps == 0:
-                avg_loss = train_loss / logging_steps
-                print(f'Epoch {epoch+1}/{n_epochs}, '
-                    f'Batch {batch_idx+1}, '
-                    f'Loss: {avg_loss:.4f}, '
-                    f'Time: {time.time() - start:.4f}s')
-                train_loss = 0.0
-                start = time.time()
-            
+        print(f'Avg loss train epoch {epoch + 1}: {train_loss_epoch[-1]:.4f} | Time: {(time.time() - start):.3f}s')
+        
         # Validation
         if valid and (epoch + 1) % valid_interval == 0:
-            model.eval()
-            val_loss = 0.0
-            with torch.inference_mode():
-                for batch_idx, (x_0, _) in enumerate(test_data_loader):
-                    x_0 = x_0.to(config.DEVICE)
-                    B = x_0.shape[0] # Batch size
-
-                    t: torch.Tensor = torch.randint(0, config.T, (B,)).to(config.DEVICE)
-                    eps = torch.randn_like(x_0).to(config.DEVICE)
-
-                    x_0_coef = torch.sqrt(config.alpha_bars[t]).view(-1,1,1,1)
-                    eps_coef = torch.sqrt(1 - config.alpha_bars[t]).view(-1,1,1,1)
-                    x_t = x_0_coef*x_0 + eps*eps_coef
-
-                    eps_theta = model(x_t, t)
-                    loss = torch.mean((eps - eps_theta)**2)
-                    val_loss += loss.item()
-
-                val_loss /= len(test_data_loader)
-                val_losses.append(val_loss)
-                print(f'Validation Loss after epoch {epoch + 1}: {val_loss:.4f}')
-
-                if val_loss < min(val_losses):
-                    model_name = model_name + f'epoch_{epoch}_BEST'
+            start = time.time()
+            val_step_losses = validate(model, test_data_loader, logging_steps)
+            # Store loss of each batch
+            val_loss_batch.extend(val_step_losses)
+            # Store mean loss of each epoch
+            val_loss_epoch.append(np.mean(val_loss_batch))
+            
+            print(f'Avg loss eval epoch {epoch + 1}: {val_loss_epoch[-1]:.4f} | Time: {(time.time() - start):.3f}s')
+            if len(val_loss_epoch) > 1:
+                if val_loss_epoch[-1] <= min(val_loss_epoch[:-1]):
+                    model_name = model_name + f'epoch_{epoch+1}_BEST'
                     path = utils.save_model(model, model_name, suffix=suffix)
                     print(f'Saved new best model at: {path}')
-        
+
         if checkpoint:
             model_name = model_name + f'epoch_{epoch}'
             path = utils.save_model(model, model_name, suffix=suffix)
             print(f'Saved model at: {path}')
         
-    return train_losses, val_losses
+    result = {
+        'train_loss_per_batch' : train_loss_batch,
+        'train_loss_per_epoch' : train_loss_epoch,
+        'val_loss_per_batch' : val_loss_batch,
+        'val_loss_per_epoch' : val_loss_epoch
+    }
+    return result
+
+def train_step(model: torch.nn.Module,
+               train_dataloader: torch.utils.data.DataLoader,
+               optimizer: torch.optim.Optimizer,
+               logging_steps: int = 10) -> List[float]:
+    model.train()
+    losses = []
+    train_loss = 0.0
+    start = time.time()
+    for batch_idx, (x_0, _) in enumerate(train_dataloader):
+        x_0 = x_0.to(config.DEVICE)
+        B = x_0.shape[0] # Batch size
+
+        # Sample t ~ Uniform(0, T-1)
+        t: torch.Tensor = torch.randint(0, config.T, (B,)).to(config.DEVICE) # Sample a total amount of 'B' 'T's
+        # Sample noise vector e ~ N(0, I)
+        eps: torch.Tensor = torch.randn_like(x_0).to(config.DEVICE)
+        # Calculate x_t
+        x_0_coef = torch.sqrt(config.alpha_bars[t]).view(-1,1,1,1)
+        eps_coef = torch.sqrt(1 - config.alpha_bars[t]).view(-1,1,1,1)
+
+        x_t = x_0_coef*x_0 + eps*eps_coef # Forward diffusion
+        # eps theta
+        # Reverse diffusion - predict the noise
+        eps_theta = model(x_t, t)
+        # Calculate MSE loss
+        loss = torch.mean((eps - eps_theta)**2)
+        train_loss += loss.item()
+        losses.append(loss.item())
+        
+        # Gradient descent to update model params
+        optimizer.zero_grad()
+        loss.backward()
+        optimizer.step()
+
+        if (batch_idx + 1) % logging_steps == 0:
+                avg_loss = train_loss / logging_steps
+                print(f'Batch {batch_idx+1}, '
+                    f'Loss: {avg_loss:.4f}, '
+                    f'Time: {time.time() - start:.4f}s')
+                train_loss = 0.0
+                start = time.time()
+
+    return losses
+
+
+def validate(model: torch.nn.Module,
+             test_dataloader: torch.utils.data.DataLoader,
+             logging_steps: int = 10) -> List[float]:
+    model.eval()
+    losses = []
+    batch_val_loss = 0.0
+    epoch_val_loss = 0.0
+    val_loss = 0.0
+    start = time.time()
+    with torch.inference_mode():
+        for batch_idx, (x_0, _) in enumerate(test_dataloader):
+            x_0 = x_0.to(config.DEVICE)
+            B = x_0.shape[0] # Batch size
+
+            t: torch.Tensor = torch.randint(0, config.T, (B,)).to(config.DEVICE)
+            eps = torch.randn_like(x_0).to(config.DEVICE)
+
+            x_0_coef = torch.sqrt(config.alpha_bars[t]).view(-1,1,1,1)
+            eps_coef = torch.sqrt(1 - config.alpha_bars[t]).view(-1,1,1,1)
+            x_t = x_0_coef*x_0 + eps*eps_coef
+
+            eps_theta = model(x_t, t)
+
+            loss = torch.mean((eps - eps_theta)**2)
+            val_loss += loss.item()
+            losses.append(loss.item())
+
+            if (batch_idx + 1) % logging_steps == 0:
+                avg_loss = val_loss / logging_steps
+                print(f'Batch {batch_idx+1}, '
+                    f'Val Loss: {avg_loss:.4f}, '
+                    f'Time: {time.time() - start:.4f}s')
+                val_loss = 0.0
+                start = time.time()
+
+    return losses
 
 
 def inference(model: torch.nn.Module, n_samples: int) -> ...:
@@ -113,7 +163,7 @@ def inference(model: torch.nn.Module, n_samples: int) -> ...:
     with torch.inference_mode():
         for t in tqdm(range(T-1, -1, -1)):
             # Add noise only if not the final step
-            z: torch.Tensor = torch.rand_like(x_t) if t > 0 else torch.zeros_like(x_t)
+            z: torch.Tensor = torch.randn_like(x_t) if t > 0 else torch.zeros_like(x_t)
 
             # Create time vector for all samples
             t_tensor: torch.Tensor = torch.full((n_samples,), t, device=config.DEVICE, dtype=torch.long)
@@ -127,9 +177,9 @@ def inference(model: torch.nn.Module, n_samples: int) -> ...:
             sigma_t = config.sigmas[t]
             
             # Reshape coefficients for broadcasting with (n_samples, C, H, W)
-            alpha_t = alpha_t.view(1, 1, 1, 1)
-            alpha_bar_t = alpha_bar_t.view(1, 1, 1, 1)
-            sigma_t = sigma_t.view(1, 1, 1, 1)
+            alpha_t = alpha_t.view(1, 1, 1, 1).to(config.DEVICE)
+            alpha_bar_t = alpha_bar_t.view(1, 1, 1, 1).to(config.DEVICE)
+            sigma_t = sigma_t.view(1, 1, 1, 1).to(config.DEVICE)
 
             # Reverse diffusion step MATH
             # x_t-1 = (1 / sqrt(alpha_t)) * (x_t - (1 - alpha_t) / (sqrt(1 - alpha_bar_t)) * epsilon_theta(x_t, t)) + sigma_t * z

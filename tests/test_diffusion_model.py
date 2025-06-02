@@ -5,7 +5,6 @@ Tests model architecture, diffusion mathematics, training/inference, and identif
 """
 
 import sys
-import os
 from pathlib import Path
 
 # Add project root to path
@@ -13,14 +12,11 @@ project_root = Path(__file__).parent.parent
 sys.path.insert(0, str(project_root))
 
 import torch
-import torch.nn as nn
-import numpy as np
-import pytest
 import warnings
 from unittest.mock import patch
 
 # Import project modules
-from src import config, modified_pixelCNN, diffusion, utils, datasets
+from src import config, modified_Unet, diffusion, utils, datasets
 
 # Suppress warnings for cleaner test output
 warnings.filterwarnings("ignore")
@@ -118,7 +114,7 @@ class TestModelArchitecture:
     
     def test_model_initialization(self):
         """Test model can be initialized correctly."""
-        model = modified_pixelCNN.Model(config.model_config).to(config.DEVICE)
+        model = modified_Unet.Model(config.model_config).to(config.DEVICE)
         
         # Test model has parameters
         param_count = sum(p.numel() for p in model.parameters())
@@ -132,7 +128,7 @@ class TestModelArchitecture:
     
     def test_model_forward_pass(self):
         """Test model forward pass with different inputs."""
-        model = modified_pixelCNN.Model(config.model_config).to(config.DEVICE)
+        model = modified_Unet.Model(config.model_config).to(config.DEVICE)
         
         # Test different batch sizes
         for batch_size in [1, 4, 8]:
@@ -153,7 +149,7 @@ class TestModelArchitecture:
     
     def test_timestep_embedding(self):
         """Test timestep embedding function."""
-        from src.modified_pixelCNN import get_timestep_embedding
+        from src.modified_Unet import get_timestep_embedding
         
         # Test different timestep inputs
         for batch_size in [1, 4]:
@@ -171,7 +167,7 @@ class TestTrainingLoop:
     
     def test_training_step_shapes(self):
         """Test that training step produces correct tensor shapes."""
-        model = modified_pixelCNN.Model(config.model_config).to(config.DEVICE)
+        model = modified_Unet.Model(config.model_config).to(config.DEVICE)
         optimizer = torch.optim.Adam(model.parameters(), lr=config.LR)
         
         # Create dummy batch
@@ -239,7 +235,7 @@ class TestTrainingLoop:
     
     def test_model_saving_loading(self):
         """Test model saving and loading functionality."""
-        model = modified_pixelCNN.Model(config.model_config).to(config.DEVICE)
+        model = modified_Unet.Model(config.model_config).to(config.DEVICE)
         
         # Save model
         test_name = "test_model_save"
@@ -277,7 +273,7 @@ class TestInference:
     
     def test_inference_shapes(self):
         """Test inference produces correctly shaped outputs."""
-        model = modified_pixelCNN.Model(config.model_config).to(config.DEVICE)
+        model = modified_Unet.Model(config.model_config).to(config.DEVICE)
         
         # Test different sample counts
         for n_samples in [1, 2, 4]:
@@ -303,7 +299,7 @@ class TestInference:
 
     def test_inference_determinism(self):
         """Test inference determinism with fixed random seed."""
-        model = modified_pixelCNN.Model(config.model_config).to(config.DEVICE)
+        model = modified_Unet.Model(config.model_config).to(config.DEVICE)
         
         # Set seed and generate
         torch.manual_seed(42)
@@ -357,7 +353,7 @@ class TestUtilities:
         
         # Test show_images doesn't crash  
         try:
-            utils.show_images(imgs[:1], title="Test", show=False, savefig=False)
+            utils.show_final_image(imgs[:1], title="Test", show=False, savefig=False)
             print("✅ show_images function works")
         except Exception as e:
             print(f"❌ show_images failed: {e}")

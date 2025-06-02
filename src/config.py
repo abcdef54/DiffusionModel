@@ -8,7 +8,6 @@ from torchvision import transforms
 import torchvision
 
 
-
 def cosine_beta_schedule(timesteps, s=0.008):
     steps = timesteps + 1
     x = torch.linspace(0, timesteps, steps)
@@ -17,12 +16,20 @@ def cosine_beta_schedule(timesteps, s=0.008):
     betas = 1 - (alphas_cumprod[1:] / alphas_cumprod[:-1])
     return torch.clip(betas, 0, 0.999)
 
+def get_best_device():
+    if torch.cuda.is_available():
+        return torch.device("cuda")
+    elif hasattr(torch.backends, "mps") and torch.backends.mps.is_available():
+        return torch.device("mps")
+    else:
+        return torch.device("cpu")
+
 DATA_PATH = Path('data/')
 CUSTOM_DATA_PATH = Path('data/custom/')
 MODEL_PATH = Path('models/')
 OUTPUT_PATH = Path('output/')
 
-DEVICE = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
+DEVICE = get_best_device()
 
 DROP_RATE = 0.1
 BATCH_SIZE: int = 32
