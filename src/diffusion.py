@@ -1,6 +1,6 @@
 import torch
 from tqdm import tqdm
-from typing import List, Tuple, Dict
+from typing import List, Dict
 from . import config, utils
 import time
 import numpy as np

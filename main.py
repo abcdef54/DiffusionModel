@@ -6,7 +6,6 @@ import src
 import src.datasets
 
 from pathlib import Path
-from datetime import datetime
 from typing import Tuple, List
 from os import system, name
 
@@ -100,13 +99,6 @@ def choose_dataset() -> str:
         input(f'Current dataset: {config.CURRENT_DATASET}')
 
     return datasets_list[choice]
-
-def fig_save_name() -> str:
-    current_time = datetime.now()
-    current_date = current_time.date()
-    formatted_time = current_time.strftime('%H-%M-%S')
-    full_time = str(current_date) + '_At_' + str(formatted_time)
-    return full_time
 
 def set_hyperparameters():
     while True:
@@ -298,6 +290,7 @@ def main_loop() -> None:
     dataset_name: str = config.CURRENT_DATASET
     checkpoint: str
     transform_strings: List[str]  = ['ToTensor()', 'Normalize((0.5,),(0.5))']
+    loss_dict = None
 
     while True:
         clear_terminal()
@@ -322,22 +315,24 @@ def main_loop() -> None:
                 checkpoint: str = input('Checkpoint save (Y/N): ')
                 print_hyperparameters()
                 if checkpoint.lower() == 'y':
-                    diffusion.train(model, config.TRAIN_DATA_LOADER, config.TEST_DATA_LOADER, config.N_EPOCHS, opti, config.LOGGING_STEPS, model_name, checkpoint=True)
+                    loss_dict = diffusion.train(model, config.TRAIN_DATA_LOADER, config.TEST_DATA_LOADER, config.N_EPOCHS, opti, config.LOGGING_STEPS, model_name, checkpoint=True)
                 else:
-                    diffusion.train(model, config.TRAIN_DATA_LOADER, config.TEST_DATA_LOADER, config.N_EPOCHS, opti, config.LOGGING_STEPS, checkpoint=False)
+                    loss_dict = diffusion.train(model, config.TRAIN_DATA_LOADER, config.TEST_DATA_LOADER, config.N_EPOCHS, opti, config.LOGGING_STEPS, checkpoint=False)
                     
                 plot = input('Plot loss curve (Y/N): ')
                 if plot.lower() == 'y':
-                    pass
+                    utils.plot_loss_curve(loss_dict, figname=model_name + 'loss_curve.png')
 
-                input()
+                input('Press enter to continue.')
             case 2:
                 n_images: int = int(input('Number of images to generate: '))
                 generated_images = diffusion.inference(model, n_images)
-                image_name = fig_save_name() + '.png'
 
-                utils.show_grid(generated_images, 'Generated Image From Diffusion Model', savefig=True, figname=image_name, show=False)
-                utils.show_final_image(generated_images, 'Generated Image From Diffusion Model', savefig=True, figname=image_name, show=True)
+                figname = input('Image name for saving: ')
+                
+                steps: int = int(input('Progress image step (default 1): ')) 
+                utils.show_grid(generated_images, 'Generated Image From Diffusion Model', savefig=True, show=False, figname=figname, steps=steps)
+                utils.show_final_image(generated_images, 'Generated Image From Diffusion Model', savefig=True, show=True, figname=figname)
                 input()
             case 3:
                 clear_terminal()
