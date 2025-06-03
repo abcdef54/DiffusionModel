@@ -300,6 +300,7 @@ class Model(nn.Module):
 
     def forward(self, x, t):
         # Asserts that the width and height of the input image are equal to a preset resolution
+        # print(f"INPUT TENSOR SHAPE: {x.shape}") # DEBUG
         assert x.shape[2] == x.shape[3] == self.resolution
 
         # timestep embedding

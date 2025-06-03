@@ -32,13 +32,13 @@ OUTPUT_PATH = Path('output/')
 DEVICE = get_best_device()
 
 DROP_RATE = 0.1
-BATCH_SIZE: int = 32
+BATCH_SIZE: int = 16  # Reduced from 32 to prevent CUDA OOM
 WORKERS = os.cpu_count() or 0
-N_EPOCHS: int = 3
-LOGGING_STEPS: int = 10
-T: int = 50
+N_EPOCHS: int = 1
+LOGGING_STEPS: int = BATCH_SIZE
+T: int = 750
 LR: float = 2e-4
-NUM_RES_BLOCK: int = 2
+NUM_RES_BLOCK: int = 3
 
 CURRENT_TRANSFORMATIONS = transforms.Compose([
     transforms.ToTensor(),
@@ -88,7 +88,7 @@ CURRENT_DATASET: str = TRAIN_DATASET.__class__.__name__
 IN_CHANNELS: int = 1  # Default for MNIST
 H: int = 28  # Default for MNIST
 W: int = 28  # Default for MNIST
-OUT_CHANNELS: int = IN_CHANNELS  # Default for MNIST
+OUT_CHANNELS: int = 1  # Default for MNIST
 
 # Setting up dataloader
 def make_dataloader(dataset: torch.utils.data.Dataset,
@@ -118,10 +118,10 @@ model_config = {
         'type': "simple",
         'in_channels': IN_CHANNELS,  # Will be updated when dataset is loaded
         'out_ch': OUT_CHANNELS,      # Will be updated when dataset is loaded
-        'ch': 128,
-        'ch_mult': [1, 2, 2,],
+        'ch': 192, # Increase from 128 to 192
+        'ch_mult': [1, 2, 2, 2], # [1, 2, 2,]
         'num_res_blocks': NUM_RES_BLOCK,
-        'attn_resolutions': [1, ],
+        'attn_resolutions': [16, 8], #1, ]  # Add attention at multiple resolutions
         'dropout': DROP_RATE,
         'resamp_with_conv': True,
     },

@@ -1,3 +1,7 @@
+import os
+# Set CUDA memory allocation configuration BEFORE importing torch
+os.environ['PYTORCH_CUDA_ALLOC_CONF'] = 'expandable_segments:True'
+
 import torch
 from torchvision import transforms
 import torchvision
@@ -8,6 +12,10 @@ import src.datasets
 from pathlib import Path
 from typing import Tuple, List
 from os import system, name
+
+# Clear CUDA cache at startup
+if torch.cuda.is_available():
+    torch.cuda.empty_cache()
 
 
 def clear_terminal():
@@ -109,19 +117,18 @@ Available datasets:
                 ''')
         choice = take_integer_input('Choice: ')
         if choice == 0:
-            input(f'Current dataset: {config.CURRENT_DATASET}')
             break
         elif choice == 1:
-            config.TRAIN_DATASET, config.TEST_DATASET, config.IN_CHANNELS, config.H, config.W = src.datasets.download_MNIST(transformation=config.CUSTOM_TRANSFORMATION)
+            src.datasets.download_MNIST(transformation=config.CUSTOM_TRANSFORMATION)
             transform_strings = get_transform_strings('MNIST')
         elif choice == 2:
-            config.TRAIN_DATASET, config.TEST_DATASET, config.IN_CHANNELS, config.H, config.W = src.datasets.download_CIFAR10(transformation=config.CUSTOM_TRANSFORMATION)
+            src.datasets.download_CIFAR10(transformation=config.CUSTOM_TRANSFORMATION)
             transform_strings = get_transform_strings('CIFAR10')
         elif choice == 3:
-            config.TRAIN_DATASET, config.TEST_DATASET, config.IN_CHANNELS, config.H, config.W = src.datasets.download_CIFAR100(transformation=config.CUSTOM_TRANSFORMATION)
+            src.datasets.download_CIFAR100(transformation=config.CUSTOM_TRANSFORMATION)
             transform_strings = get_transform_strings('CIFAR100')
         elif choice == 4:
-            config.TRAIN_DATASET, config.TEST_DATASET, config.IN_CHANNELS, config.H, config.W = src.datasets.download_CelebA(transformation=config.CUSTOM_TRANSFORMATION)
+            src.datasets.download_CelebA(transformation=config.CUSTOM_TRANSFORMATION)
             transform_strings = get_transform_strings('CelebA')
         else:
             print(f'Invalid choice: {choice}')
@@ -147,24 +154,40 @@ def set_hyperparameters():
             case 1:
                 epochs: int = int(input('n_epochs: '))
                 config.N_EPOCHS = epochs
+                config.model_config.runner.n_epochs = epochs
+
             case 2:
                 batch_size: int = int(input('batch_size: '))
                 config.BATCH_SIZE = batch_size
+
+                config.TRAIN_DATA_LOADER = config.make_dataloader(config.TRAIN_DATASET, config.BATCH_SIZE)
+                config.TEST_DATA_LOADER = config.make_dataloader(config.TEST_DATASET, config.BATCH_SIZE)
+                input(f'Remade dataloaders with the new batch size')
+
             case 3:
                 lr: float = float(input('lr: '))
                 config.LR = lr
+
             case 4:
                 logging_steps: int = int(input('logging_steps: '))
                 config.LOGGING_STEPS = logging_steps
+                config.model_config.runner.logging_steps = logging_steps
+
             case 5:
                 T: int = int(input('T: '))
                 config.T = T
+                config.model_config.diffusion.num_diffusion_timesteps = T
+
             case 6:
                 drop_rate: float = float(input('drop_rate: '))
                 config.DROP_RATE = drop_rate
+                config.model_config.model.dropout = drop_rate
+
             case 7:
                 res_blocks: int = int(input('res_blocks: '))
                 config.NUM_RES_BLOCK = res_blocks
+                config.model_config.model.num_res_blocks = res_blocks
+
             case 0:
                 break
             case _:
@@ -207,6 +230,7 @@ def print_hyperparameters(header: bool = True):
     if header:
         print(f'-------------------------------------------------------Training-Config-------------------------------------------------------')
     print(f'Image size: ({config.IN_CHANNELS},{config.W},{config.H})')
+    print(f'Noising step: {config.T}')
     print(f'n_epochs: {config.N_EPOCHS}')
     print(f'Learning rate: {config.LR}')
     print(f'Drop rate: {config.DROP_RATE}')
@@ -443,6 +467,9 @@ def main_loop() -> None:
                 input(f'Successfully loaded model at: {model_path}')
             case 4:
                 dataset_name, transform_strings = choose_dataset()
+                input(f'Recreated a new model compatible with the new dataset')
+                model: torch.nn.Module = modified_Unet.Model(config.model_config).to(config.DEVICE)
+                opti = torch.optim.Adam(model.parameters(), lr=config.LR)
             case 5:
                 input(f'Feature not implemented')
                 # config.CUSTOM_TRANSFORMATION, transform_strings = make_transformation()
@@ -474,6 +501,9 @@ def main_loop() -> None:
                 set_device()
             case 9:
                 set_hyperparameters()
+                model: torch.nn.Module = modified_Unet.Model(config.model_config).to(config.DEVICE)
+                opti = torch.optim.Adam(model.parameters(), lr=config.LR)
+                input('Remade a new model with the new hyperparams')
             case 10:
                 show_context()
             case 11:

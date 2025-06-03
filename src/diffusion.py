@@ -48,13 +48,13 @@ def train(model: torch.nn.Module,
             print(f'Avg loss eval epoch {epoch + 1}: {val_loss_epoch[-1]:.4f} | Time: {(time.time() - start):.3f}s')
             if len(val_loss_epoch) > 1:
                 if val_loss_epoch[-1] <= min(val_loss_epoch[:-1]):
-                    model_name = model_name + f'epoch_{epoch+1}_BEST'
-                    path = utils.save_model(model, model_name, suffix=suffix)
+                    best_model_name = model_name + f'_epoch_{epoch+1}_BEST'
+                    path = utils.save_model(model, best_model_name, suffix=suffix)
                     print(f'Saved new best model at: {path}')
 
         if checkpoint:
-            model_name = model_name + f'epoch_{epoch}'
-            path = utils.save_model(model, model_name, suffix=suffix)
+            checkpoint_name = model_name + f'_epoch_{epoch+1}'
+            path = utils.save_model(model, checkpoint_name, suffix=suffix)
             print(f'Saved model at: {path}')
         
     result = {
@@ -73,8 +73,14 @@ def train_step(model: torch.nn.Module,
     losses = []
     train_loss = 0.0
     start = time.time()
+    
+    # Clear CUDA cache before training
+    if torch.cuda.is_available():
+        torch.cuda.empty_cache()
+    
     for batch_idx, (x_0, _) in enumerate(train_dataloader):
         x_0 = x_0.to(config.DEVICE)
+        # print(f'train_step function: X_0_TENSOR_SHAPE: {x_0.shape}')
         B = x_0.shape[0] # Batch size
 
         # Sample t ~ Uniform(0, T-1)
@@ -86,9 +92,11 @@ def train_step(model: torch.nn.Module,
         eps_coef = torch.sqrt(1 - config.alpha_bars[t]).view(-1,1,1,1)
 
         x_t = x_0_coef*x_0 + eps*eps_coef # Forward diffusion
+        # print(f'train_step function: X_t_TENSOR_SHAPE: {x_t.shape}')
         # eps theta
         # Reverse diffusion - predict the noise
         eps_theta = model(x_t, t)
+        # print(f'train_step function: eps_theta_TENSOR_SHAPE: {eps_theta.shape}')
         # Calculate MSE loss
         loss = torch.mean((eps - eps_theta)**2)
         train_loss += loss.item()
@@ -106,6 +114,10 @@ def train_step(model: torch.nn.Module,
                     f'Time: {time.time() - start:.4f}s')
                 train_loss = 0.0
                 start = time.time()
+                
+                # Clear CUDA cache periodically to prevent memory buildup
+                if torch.cuda.is_available():
+                    torch.cuda.empty_cache()
 
     return losses
 
