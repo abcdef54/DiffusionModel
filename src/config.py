@@ -36,7 +36,7 @@ BATCH_SIZE: int = 16  # Reduced from 32 to prevent CUDA OOM
 WORKERS = os.cpu_count() or 0
 N_EPOCHS: int = 1
 LOGGING_STEPS: int = BATCH_SIZE
-T: int = 750
+T: int = 1000
 LR: float = 2e-4
 NUM_RES_BLOCK: int = 3
 

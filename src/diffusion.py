@@ -16,7 +16,8 @@ def train(model: torch.nn.Module,
           checkpoint: bool = True,
           suffix: str = '.pth',
           valid: bool = True,
-          valid_interval: int = 1) -> Dict[str, List[float]]:
+          valid_interval: int = 1,
+          start_epoch: int = 0) -> Dict[str, List[float]]:
 
     model = model.to(config.DEVICE)
 
@@ -26,7 +27,7 @@ def train(model: torch.nn.Module,
     val_loss_epoch = []
 
     
-    for epoch in tqdm(range(n_epochs)):
+    for epoch in tqdm(range(start_epoch, start_epoch + n_epochs)):
         start = time.time()
         train_step_losses = train_step(model, train_data_loader, optimizer, logging_steps)
         # Store loss of each batch
@@ -51,6 +52,26 @@ def train(model: torch.nn.Module,
                     best_model_name = model_name + f'_epoch_{epoch+1}_BEST'
                     path = utils.save_model(model, best_model_name, suffix=suffix)
                     print(f'Saved new best model at: {path}')
+                    
+                    # Cleanup old best models to save space
+                    try:
+                        from pathlib import Path
+                        import glob
+                        model_dir = config.MODEL_PATH
+                        best_pattern = str(model_dir / f"{model_name}_*_BEST{suffix}")
+                        old_best_files = glob.glob(best_pattern)
+                        
+                        for old_file in old_best_files:
+                            old_path = Path(old_file)
+                            # Don't delete the current best model
+                            if old_path != path:
+                                try:
+                                    old_path.unlink()
+                                    print(f'🗑️  Deleted old best model: {old_path.name}')
+                                except Exception as e:
+                                    print(f'⚠️  Could not delete {old_path.name}: {e}')
+                    except Exception as e:
+                        print(f'⚠️  Error during best model cleanup: {e}')
 
         if checkpoint:
             checkpoint_name = model_name + f'_epoch_{epoch+1}'
