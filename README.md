@@ -8,10 +8,10 @@ The model implements a U-Net architecture specifically designed for diffusion mo
 
 - **Encoder-Decoder Structure**: Symmetric downsampling and upsampling paths
 - **Residual Blocks**: ResNet-style blocks with time embedding injection
-- **Self-Attention**: Applied at specified resolutions for global coherence
+- **Self-Attention**: Applied at dataset-specific resolutions for global coherence
 - **Skip Connections**: Feature concatenation between encoder and decoder
 - **Time Embeddings**: Sinusoidal positional encoding for diffusion timesteps
-- **Configurable Channels**: Base channels: 128, multipliers: [1, 2, 2]
+- **Configurable Channels**: Base channels: 128, dataset-adaptive multipliers
 
 ## 🛠️ Installation
 
@@ -32,17 +32,20 @@ source .venv/bin/activate  # On Windows: .venv\Scripts\activate
 pip install -r requirements.txt
 ```
 
-4. Create necessary directories:
+4. Create necessary directories (automatically created on first run):
 ```bash
 mkdir -p data models output
 ```
-## Test Reconstructed Images
-![alt text](output/clear/testingg.png)
 
-![output/clear/abc.png](output/clear/abc.png)
+## 📊 Generated Samples
 
-![output/grid/testtt_2.png](output/grid/testtt_2.png)
-## Usage
+![Test Reconstructed Images](output/clear/testingg.png)
+
+![Generated Samples](output/clear/abc.png)
+
+![Grid Visualization](output/grid/testtt_2.png)
+
+## 🚀 Usage
 
 ### Quick Start
 
@@ -54,37 +57,25 @@ python main.py
 ### Main Menu Options
 
 1. **Train Model** - Train the diffusion model on selected dataset
-2. **Generate Images** - Create new images using trained model
+2. **Generate Images** - Create new images using trained model  
 3. **Load Model** - Load previously saved model checkpoints
 4. **Choose Dataset** - Switch between MNIST, CIFAR-10, CIFAR-100, CelebA
-5. **Configure Transforms** - Set up image preprocessing pipeline
+5. **Make Transformation** - Configure image preprocessing (currently disabled)
 6. **Save Model** - Save current model state
-7. **View Config** - Display current training configuration
+7. **Training Config** - Display current configuration
 8. **Change Device** - Switch between CPU, CUDA, MPS
 9. **Set Hyperparameters** - Adjust training parameters
-10. **Get Context** - Display comprehensive help and documentation
+10. **Get Context** - Display comprehensive help and quick guide
+11. **New Model** - Create fresh model instance
 
-### Typical Workflow
+### Recommended Workflow
 
-1. **Choose Dataset**: Select from available datasets (MNIST recommended for first run)
-2. **Configure Settings**: Set hyperparameters, transforms, and device
-3. **Train Model**: Train the diffusion model (default: 3 epochs)
-4. **Generate Images**: Create new images from the trained model
-5. **Save Results**: Models and generated images are automatically saved
-
-### Example Training Session
-
-```bash
-# Start the program
-python main.py
-
-# Menu choices:
-# 4 -> Choose MNIST dataset
-# 9 -> Set epochs to 10, batch size to 64
-# 8 -> Set device to CUDA (if available)
-# 1 -> Train model with name "mnist_model"
-# 2 -> Generate 16 images
-```
+1. **Choose Dataset** (Option 4): Select MNIST for quick testing
+2. **Set Device** (Option 8): Use CUDA/MPS if available
+3. **Configure Hyperparameters** (Option 9): Adjust epochs, batch size
+4. **Train Model** (Option 1): Train with checkpointing enabled
+5. **Generate Images** (Option 2): Create new samples
+6. **Save Model** (Option 6): Preserve trained weights
 
 ## 📁 Project Structure
 
@@ -98,93 +89,94 @@ DiffusionModel/
 │   ├── diffusion.py          # Training and inference functions
 │   ├── utils.py              # Utility functions (save/load, visualization)
 │   └── datasets.py           # Dataset loading functions
-├── models/                   # Saved model checkpoints
-├── output/                   # Generated images
-├── data/                     # Downloaded datasets
-├── requirements.txt          # Python dependencies
-└── README.md                # This file
+├── models/                   # Saved model checkpoints (.pth/.pt)
+├── output/
+│   ├── clear/               # Final generated images
+│   └── grid/                # Grid visualizations with progress steps
+├── data/                    # Downloaded datasets (auto-created)
+├── .venv/                   # Virtual environment
+├── requirements.txt         # Python dependencies
+└── README.md               # This file
 ```
 
 ## 🎯 Supported Datasets
 
-| Dataset | Image Size | Channels | Classes | Description |
-|---------|------------|----------|---------|-------------|
-| MNIST | 28×28 | 1 | 10 | Handwritten digits |
-| CIFAR-10 | 32×32 | 3 | 10 | Natural images |
-| CIFAR-100 | 32×32 | 3 | 100 | Natural images (fine-grained) |
-| CelebA | 64×64 | 3 | - | Celebrity faces |
+| Dataset | Image Size | Channels | Classes | Architecture Config |
+|---------|------------|----------|---------|-------------------|
+| MNIST | 28×28 | 1 | 10 | ch_mult: [1,2,2], attn: [14,7] |
+| CIFAR-10 | 32×32 | 3 | 10 | ch_mult: [1,2,2,2], attn: [16,8] |
+| CIFAR-100 | 32×32 | 3 | 100 | ch_mult: [1,2,2,2], attn: [16,8] |
+| CelebA | 64×64 | 3 | - | ch_mult: [1,2,2,2,4], attn: [32,16,8] |
+
+Each dataset automatically configures appropriate transforms and model architecture.
 
 ## ⚙️ Configuration
 
 ### Default Hyperparameters
 
-- **Epochs**: 3
+- **Epochs**: 1 (adjustable)
 - **Batch Size**: 32
 - **Learning Rate**: 2e-4
-- **Diffusion Steps (T)**: 50
+- **Diffusion Steps (T)**: 500
 - **Dropout Rate**: 0.1
 - **Residual Blocks**: 2
+- **Base Channels**: 128
 - **Beta Schedule**: Cosine
 
-### Customizable Parameters
+### Device Support
 
-All parameters can be modified through the interactive menu:
-- Training epochs and batch size
-- Learning rate and optimizer settings
-- Model architecture (channels, blocks, attention)
-- Diffusion process parameters
-- Image preprocessing transforms
+Automatically detects and supports:
+- **CUDA**: NVIDIA GPU acceleration
+- **MPS**: Apple Silicon acceleration  
+- **CPU**: Universal fallback
+- **Memory Management**: CUDA cache clearing and expandable segments
 
-## 🧠 How Diffusion Models Work
+## 🧠 How It Works
 
 ### Forward Process (Training)
-1. Start with real images from the dataset
-2. Gradually add Gaussian noise over T timesteps
-3. Train the model to predict the noise added at each step
+1. Add Gaussian noise to real images over T timesteps
+2. Train U-Net to predict noise at each timestep
+3. Use cosine beta schedule for stable training
 
 ### Reverse Process (Generation)
-1. Start with pure random noise
-2. Use the trained model to predict and remove noise
-3. Iteratively denoise over T timesteps to generate images
+1. Start with random noise
+2. Iteratively denoise using trained model
+3. Generate new images through learned reverse process
 
-The model learns to reverse the noise corruption process, enabling it to generate new samples from noise.
+## 🔧 Features
 
-## 📊 Model Performance
+### Training
+- **Checkpointing**: Save models during training
+- **Loss Tracking**: Monitor training progress
+- **Validation**: Optional test set evaluation
+- **Progress Visualization**: Real-time loss curves
 
-The implementation includes:
-- **Training Loss Tracking**: Monitor loss per batch and epoch
-- **Validation**: Optional validation on test set
-- **Checkpointing**: Save best models and epoch checkpoints
-- **Visualization**: Real-time image generation and saving
+### Generation
+- **Batch Generation**: Create multiple images
+- **Grid Visualization**: See denoising progress steps
+- **Custom Naming**: Save images with custom filenames
+- **Progress Steps**: Configurable visualization intervals
 
-## 🔧 Advanced Usage
+### Model Management
+- **Save/Load**: Flexible model persistence (.pth/.pt)
+- **Architecture Adaptation**: Auto-configure for datasets
+- **Memory Optimization**: CUDA memory management
 
-### Custom Transforms
+## 💡 Quick Tips
 
-Configure image preprocessing through the interactive menu:
-- Resize images to custom dimensions
-- Normalize to different ranges ([-1,1] or [0,1])
-- Chain multiple transformations
+- **Start with MNIST** for fast prototyping (28×28, 1 channel)
+- **Use GPU acceleration** for faster training
+- **Enable checkpointing** for long training sessions
+- **Monitor memory usage** with larger datasets
+- **Experiment with T steps** (fewer = faster, more = higher quality)
 
-### Device Selection
+## 📚 Technical Details
 
-Automatically detects and allows selection of:
-- **CPU**: Universal compatibility
-- **CUDA**: NVIDIA GPU acceleration
-- **MPS**: Apple Silicon acceleration
+- **Noise Schedule**: Cosine beta schedule (stable training)
+- **Architecture**: Time-conditional U-Net with attention
+- **Optimization**: Adam optimizer with 2e-4 learning rate
 
-### Model Checkpointing
-
-- Automatic saving of best models based on validation loss
-- Manual model saving with custom names
-- Easy model loading and resuming training
-
-## 🎨 Generated Samples
-
-Generated images are saved to the `output/` directory with timestamps. The model can generate:
-
-## 📚 References
-
-- **DDPM Paper**: "Denoising Diffusion Probabilistic Models" by Ho et al.
-- **Original Tutorial**: Based on Michael Wornow's tutorial with significant extensions
-- **U-Net Architecture**: Adapted for diffusion model requirements
+---
+## References
+- Tutorial by Michael Wornow - https://michaelwornow.net/2023/07/01/diffusion-models-from-scratch
+- Denoising Diffusion Probabilistic Models" by Ho et al - https://arxiv.org/abs/2006.11239
