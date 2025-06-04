@@ -1,6 +1,6 @@
 import torch
 from torchvision import transforms, datasets
-from . import config
+from . import config, utils
 from typing import Tuple
 
 def update_dataset_config(dataset_name: str,
@@ -23,13 +23,16 @@ def update_dataset_config(dataset_name: str,
         config.W = width
 
         # Remake dataloaders
-        config.TRAIN_DATA_LOADER = config.make_dataloader(train_dataset, config.BATCH_SIZE)
-        config.TEST_DATA_LOADER = config.make_dataloader(test_dataset, config.BATCH_SIZE)
+        config.TRAIN_DATA_LOADER = utils.make_dataloader(train_dataset, config.BATCH_SIZE)
+        config.TEST_DATA_LOADER = utils.make_dataloader(test_dataset, config.BATCH_SIZE)
 
         # Update model config
         config.model_config.model.in_channels = in_channels
         config.model_config.model.out_ch = in_channels
         config.model_config.data.image_size = height
+        
+        # Update model architecture for dataset
+        config.update_model_config_for_dataset(dataset_name)
         
 def download_MNIST(transformation: transforms.Compose | None = None) -> Tuple[datasets.MNIST, datasets.MNIST, int, int, int, int]:
     if transformation is None:
@@ -115,20 +118,3 @@ def download_CelebA(transformation: transforms.Compose | None = None) -> Tuple[d
     update_dataset_config('CelebA', transformation, train_dataset, valid_dataset, 3, 3, 64, 64)
 
     return train_dataset, valid_dataset, 3, 3, 64, 64
-
-
-'''
-def download_ImageNet(train: bool = True, transformation: transforms.Compose | None = None) -> datasets.ImageNet:
-    dataset = datasets.ImageNet(
-        root=config.DATA_PATH,
-        train=train,
-        download=True,
-        transform=transformation
-    )
-    
-    return dataset
-'''
-
-class CustomDataset(torch.utils.data.Dataset):
-    def __init__(self) -> None:
-        super().__init__()

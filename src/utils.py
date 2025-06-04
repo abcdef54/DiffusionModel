@@ -1,7 +1,6 @@
 import random
 import torch
 from . import config, modified_Unet
-
 from typing import Generator, Dict, List
 import matplotlib.pyplot as plt
 import os
@@ -55,16 +54,6 @@ def save_model(model: torch.nn.Module, model_name: str, save_dir: Path = config.
     
     torch.save(obj=model.state_dict(), f=full_model_name)
     return full_model_name
-
-
-'''
-def fig_save_name() -> str:
-    current_time = datetime.now()
-    current_date = current_time.date()
-    formatted_time = current_time.strftime('%H-%M-%S')
-    full_time = str(current_date) + '_At_' + str(formatted_time)
-    return full_time
-'''
 
 
 def show_grid(image: torch.Tensor, title: str = '', figname: str = 'DefaulName',
