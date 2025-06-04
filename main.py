@@ -394,8 +394,8 @@ def main_loop() -> None:
                 if not figname or any(char in figname for char in not_allow):
                     input(f'Image name is empty or contains not allowed characters: {figname}\nOnly special characters allowed are: \"-\", \"_\"')
                 
-                steps: int = int(input('Progress image step (default 1): ')) 
-                utils.show_grid(generated_images, 'Generated Image From Diffusion Model', savefig=True, show=False, figname=figname, steps=steps)
+                # steps: int = int(input('Progress image step (default 1): ')) 
+                # utils.show_images_every_n_steps(generated_images, 10, figname=figname)
                 utils.show_final_image(generated_images, 'Generated Image From Diffusion Model', savefig=True, show=True, figname=figname)
                 input()
             case 3:

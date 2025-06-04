@@ -113,7 +113,7 @@ def train_step(model: torch.nn.Module,
         eps_coef = torch.sqrt(1 - config.alpha_bars[t]).view(-1,1,1,1)
 
         x_t = x_0_coef*x_0 + eps*eps_coef # Forward diffusion
-        # print(f'train_step function: X_t_TENSOR_SHAPE: {x_t.shape}')
+
         # eps theta
         # Reverse diffusion - predict the noise
         eps_theta = model(x_t, t)
@@ -191,7 +191,7 @@ def inference(model: torch.nn.Module, n_samples: int) -> ...:
     T = config.T
 
     # Generate random noise for reverse diffusion
-    x_t = torch.randn((n_samples,C,W,H)).to(config.DEVICE)
+    x_t = torch.randn((n_samples,C,H,W)).to(config.DEVICE)
     x_ts = [] # Store the random noise image after every denoising step
     with torch.inference_mode():
         for t in tqdm(range(T-1, -1, -1)):
@@ -207,18 +207,16 @@ def inference(model: torch.nn.Module, n_samples: int) -> ...:
             # Get coefficients for this timestep
             alpha_t = config.alphas[t]
             alpha_bar_t = config.alpha_bars[t]
-            sigma_t = config.sigmas[t]
+            beta_t = config.betas[t]
             
-            # Reshape coefficients for broadcasting with (n_samples, C, H, W)
-            alpha_t = alpha_t.view(1, 1, 1, 1)
-            alpha_bar_t = alpha_bar_t.view(1, 1, 1, 1)
-            sigma_t = sigma_t.view(1, 1, 1, 1)
-
-            # Reverse diffusion step MATH
-            # x_t-1 = (1 / sqrt(alpha_t)) * (x_t - (1 - alpha_t) / (sqrt(1 - alpha_bar_t)) * epsilon_theta(x_t, t)) + sigma_t * z
-            coeff1 = 1 / torch.sqrt(alpha_t)
-            coeff2 = (1 - alpha_t) / torch.sqrt(1 - alpha_bar_t)
-
+            # Calculate posterior variance - use beta_t for simplicity (equivalent to DDPM)
+            sigma_t = torch.sqrt(beta_t)
+            
+            # DDPM reverse diffusion formula:
+            # x_{t-1} = (1/sqrt(alpha_t)) * (x_t - (beta_t/sqrt(1-alpha_bar_t)) * eps_theta) + sigma_t * z
+            coeff1 = 1.0 / torch.sqrt(alpha_t)
+            coeff2 = beta_t / torch.sqrt(1.0 - alpha_bar_t)
+            
             x_t_minus_1 = coeff1 * (x_t - coeff2 * eps_theta) + sigma_t * z
 
             # Store current x_t before updating

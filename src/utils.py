@@ -56,115 +56,185 @@ def save_model(model: torch.nn.Module, model_name: str, save_dir: Path = config.
     return full_model_name
 
 
+def denormalize_image(img: torch.Tensor, dataset_name: str = None) -> torch.Tensor:
+    """Denormalize image based on dataset-specific normalization."""
+    if dataset_name is None:
+        dataset_name = config.CURRENT_DATASET
+    
+    if dataset_name == 'MNIST':
+        # MNIST: Normalize((0.1307,), (0.3081,))
+        mean = torch.tensor([0.1307])
+        std = torch.tensor([0.3081])
+    elif dataset_name in ['CIFAR10', 'CIFAR100']:
+        if dataset_name == 'CIFAR10':
+            # CIFAR10: Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010))
+            mean = torch.tensor([0.4914, 0.4822, 0.4465])
+            std = torch.tensor([0.2023, 0.1994, 0.2010])
+        else:
+            # CIFAR100: Normalize((0.5071, 0.4867, 0.4408), (0.2675, 0.2565, 0.2761))
+            mean = torch.tensor([0.5071, 0.4867, 0.4408])
+            std = torch.tensor([0.2675, 0.2565, 0.2761])
+    elif dataset_name == 'CelebA':
+        # CelebA: Normalize((0.5063, 0.4258, 0.3832), (0.2669, 0.2414, 0.2397))
+        mean = torch.tensor([0.5063, 0.4258, 0.3832])
+        std = torch.tensor([0.2669, 0.2414, 0.2397])
+    else:
+        # Fallback: assume [-1, 1] normalization
+        return (img + 1) / 2
+    
+    # Reverse normalization: x = (x_norm * std) + mean
+    if img.dim() >= 3:
+        # Handle batched images: reshape mean/std for broadcasting
+        if img.dim() == 3:  # (C, H, W)
+            mean = mean.view(-1, 1, 1)
+            std = std.view(-1, 1, 1)
+        elif img.dim() == 4:  # (B, C, H, W)
+            mean = mean.view(1, -1, 1, 1)
+            std = std.view(1, -1, 1, 1)
+    
+    denorm_img = img * std + mean
+    return torch.clamp(denorm_img, 0, 1)
+
 def show_grid(image: torch.Tensor, title: str = '', figname: str = 'DefaulName',
               savefig: bool = True, show: bool = False, steps: int = 1) -> None:
     """
-    Display batches of RGB images arranged in a grid.
+    Display batches of images arranged in a grid.
 
     Parameters:
-    - image_batch: torch.Tensor of shape (n_times, n_images, 3(or 1), H, W)
-    - steps: Step size for sampling images (1 = all images, 2 = every other, etc.)
+    - image: torch.Tensor of shape (n_samples, n_times, C, H, W) from inference
+    - steps: Step size for sampling timesteps (1 = all timesteps, 2 = every other, etc.)
     """
     if image.ndim != 5 or image.size(2) not in [1, 3]:
-        raise ValueError("Expected input tensor of shape (n_times, n_images, 3, H, W) or shape (n_times, n_images, 1, H, W)") 
+        raise ValueError("Expected input tensor of shape (n_samples, n_times, C, H, W)")
     
-    # Calculate actual number of images to display after stepping
-    n_times: int = image.shape[0]
-    n_images = image.shape[1]
-    channels: int = image.shape[2]
-    displayed_images = len(range(0, n_images, steps))
-    n_cols = 5
-    n_rows = (displayed_images + n_cols - 1) // n_cols  # Ceiling division
+    n_samples = image.shape[0]
+    n_times = image.shape[1]
+    channels = image.shape[2]
+    
+    # Select timesteps to display based on steps parameter
+    if steps == 1:
+        timesteps_to_show = list(range(n_times))
+    else:
+        timesteps_to_show = list(range(0, n_times, steps))
+    
+    n_cols = min(len(timesteps_to_show), 5)
+    n_rows = min(n_samples, 3)  # Show max 3 samples
 
-    # Create subplots
-    for time in range(n_times):
-        fig, axes = plt.subplots(n_rows, n_cols, figsize=(n_cols * 2, n_rows * 2))
-        if n_rows == 1 and n_cols == 1:
-            axes = [axes]
-        else:
-            axes = axes.flatten()  # Flatten in case of multiple rows
-        
-        plot_idx = 0
-        for img_idx in range(0, n_images, steps):
-            # Transpose image to (64, 64, 3)
-            img = image[time, img_idx]
-            img = img.permute(1, 2, 0).cpu().numpy() # Numpy for matplotlib compatibility
-            img = (img + 1) / 2  # Denormalize from [-1, 1] to [0, 1]
-            img = img.clip(0, 1)
+    fig, axes = plt.subplots(n_rows, n_cols, figsize=(n_cols * 3, n_rows * 3))
+    # Ensure axes is always 2D array for consistent indexing
+    if n_rows == 1 and n_cols == 1:
+        axes = [[axes]]
+    elif n_rows == 1:
+        axes = [axes]
+    elif n_cols == 1:
+        axes = [[axes[i]] for i in range(n_rows)]
+    
+    for sample_idx in range(min(n_samples, n_rows)):
+        for col_idx, time_idx in enumerate(timesteps_to_show[:n_cols]):
+            img = image[sample_idx, time_idx].clone()
             
-            # Display image
+            # Denormalize and clamp to valid range
+            img = denormalize_image(img)
+            img = torch.clamp(img, 0, 1)
+            
+            # Convert to numpy for matplotlib (ensure on CPU)
+            img = img.detach().cpu()
             if channels == 1:
-                axes[plot_idx].imshow(img, cmap='gray')
+                img_np = img.squeeze().numpy()
+                axes[sample_idx][col_idx].imshow(img_np, cmap='gray', vmin=0, vmax=1)
             else:
-                axes[plot_idx].imshow(img)
-            axes[plot_idx].axis('off')  # Hide axes
-            plot_idx += 1
+                img_np = img.permute(1, 2, 0).numpy()
+                axes[sample_idx][col_idx].imshow(img_np)
+            
+            axes[sample_idx][col_idx].axis('off')
+            if sample_idx == 0:  # Only add titles to top row
+                axes[sample_idx][col_idx].set_title(f't={time_idx}', fontsize=10)
 
-        # Hide any unused subplots
-        for idx in range(displayed_images, len(axes)):
-            axes[idx].axis('off')
-
-        plt.suptitle(f'{title} - Time Step {time}', fontsize=12)
-        plt.tight_layout()
-        if savefig:
-            save_name = f'{figname}_{time}.png' 
-            save_path = config.OUTPUT_PATH / 'grid' / save_name
-            os.makedirs(save_path.parent, exist_ok=True)
-            plt.savefig(save_path)
-            print(f'Output image saved to: {save_path}')
-        if show:
-            plt.show()
-
-
+    plt.suptitle(title, fontsize=14)
+    plt.tight_layout()
+    
+    if savefig:
+        save_name = f'{figname}_grid.png'
+        save_path = config.OUTPUT_PATH / 'grid' / save_name
+        os.makedirs(save_path.parent, exist_ok=True)
+        plt.savefig(save_path, dpi=150, bbox_inches='tight')
+        print(f'Output grid saved to: {save_path}')
+    
+    if show:
+        plt.show()
+    else:
+        plt.close()
 
 def show_final_image(image: torch.Tensor, title: str = '', figname: str = 'DefaultName',
                      savefig: bool = True, show: bool = True) -> None:
     """
-    Display the final image from each batch in a PyTorch tensor.
+    Display the final denoised images from the diffusion process.
 
     Parameters:
-    - image: torch.Tensor of shape (n_times, n_images, C, H, W), where C is 1 or 3.
+    - image: torch.Tensor of shape (n_samples, n_timesteps, C, H, W) from inference
     - title: Optional title for the plot.
     - figname: File name to save the figure.
     - savefig: Whether to save the figure to a file.
     - show: Whether to display the figure.
     """
     if image.ndim != 5 or image.size(2) not in [1, 3]:
-        raise ValueError("Expected input tensor of shape (n_times, n_images, 1|3, H, W)")
+        raise ValueError("Expected input tensor of shape (n_samples, n_timesteps, C, H, W)")
 
-    n_times = image.shape[0]
+    n_samples = image.shape[0]
     channels = image.shape[2]
+    
+    # Use final timestep (fully denoised images)
+    final_images = image[:, -1]  # Shape: (n_samples, C, H, W)
+    
+    # Determine grid layout
+    n_cols = min(n_samples, 5)
+    n_rows = (n_samples + n_cols - 1) // n_cols
 
-    fig, axes = plt.subplots(1, n_times, figsize=(n_times * 2, 2))
-    if n_times == 1:
+    fig, axes = plt.subplots(n_rows, n_cols, figsize=(n_cols * 3, n_rows * 3))
+    # Flatten axes for consistent indexing
+    if n_samples == 1:
         axes = [axes]
+    else:
+        axes = axes.flatten() if hasattr(axes, 'flatten') else [axes]
 
-    for time in range(n_times):
-        # Select the last image in the batch
-        img = image[time, -1]
-        img = img.permute(1, 2, 0).cpu().numpy()
-        img = (img + 1) / 2  # Denormalize from [-1, 1] to [0, 1]
-        img = img.clip(0, 1)
+    for idx in range(n_samples):
+        ax = axes[idx] if n_samples > 1 else axes[0]
+        
+        img = final_images[idx].clone()
+        img = denormalize_image(img)
+        img = torch.clamp(img, 0, 1)
 
+        # Ensure tensor is on CPU before numpy conversion
+        img = img.detach().cpu()
         if channels == 1:
-            axes[time].imshow(img[:, :, 0], cmap='gray')
+            img_np = img.squeeze().numpy()
+            ax.imshow(img_np, cmap='gray', vmin=0, vmax=1)
         else:
-            axes[time].imshow(img)
-        axes[time].axis('off')
+            img_np = img.permute(1, 2, 0).numpy()
+            ax.imshow(img_np)
+        
+        ax.axis('off')
+        ax.set_title(f'Sample {idx+1}', fontsize=10)
+    
+    # Hide unused subplots
+    for idx in range(n_samples, len(axes) if hasattr(axes, '__len__') else 1):
+        if hasattr(axes, '__len__') and idx < len(axes):
+            axes[idx].axis('off')
 
     if title:
         fig.suptitle(title, fontsize=14)
 
     plt.tight_layout()
     if savefig:
-        save_path = config.OUTPUT_PATH / 'clear' / (figname + '.png')
+        save_path = config.OUTPUT_PATH / 'clear' / (figname + '_final.png')
         os.makedirs(save_path.parent, exist_ok=True)
-        plt.savefig(save_path)
-        print(f'Output image saved to: {save_path}')
+        plt.savefig(save_path, dpi=150, bbox_inches='tight')
+        print(f'Final images saved to: {save_path}')
     if show:
         plt.show()
     else:
         plt.close()
+
 
 
 def plot_loss_curve(train_result_dict: Dict[str, List[float]], figname: str) -> None:
@@ -209,3 +279,37 @@ def plot_loss_curve(train_result_dict: Dict[str, List[float]], figname: str) -> 
     print(f'Saved loss curve at: {save_path}')
     plt.tight_layout()
     plt.show()
+
+def show_images_every_n_steps(image: torch.Tensor, n: int = 10, start: int = 1, figname: str = 'DefaultName', end: int = 500):  
+    """
+    For each nth step from start to end (inclusive), open a new plot showing all samples at that step.
+    Parameters:
+    - image: torch.Tensor of shape (n_samples, n_times, C, H, W)
+    - n: interval of steps to show
+    - start: first step to show (inclusive)
+    - end: last step to show (inclusive)
+    """
+    n_samples = image.shape[0]
+    n_times = image.shape[1]
+    channels = image.shape[2]
+    for t in range(start, min(end+1, n_times), n):
+        fig, axes = plt.subplots(1, n_samples, figsize=(n_samples * 3, 3))
+        if n_samples == 1:
+            axes = [axes]
+        for sample_idx in range(n_samples):
+            img = image[sample_idx, t].clone()
+            img = denormalize_image(img)
+            img = torch.clamp(img, 0, 1)
+            img = img.detach().cpu()
+            if channels == 1:
+                img_np = img.squeeze().numpy()
+                axes[sample_idx].imshow(img_np, cmap='gray', vmin=0, vmax=1)
+            else:
+                img_np = img.permute(1, 2, 0).numpy()
+                axes[sample_idx].imshow(img_np)
+            axes[sample_idx].axis('off')
+            axes[sample_idx].set_title(f'Sample {sample_idx+1}')
+        fig.suptitle(f'Reconstructed Images at Step t={t}', fontsize=14)
+        plt.tight_layout()
+        plt.savefig(config.OUTPUT_PATH / 'grid' / f'{figname}_grid_{t}.png')
+        plt.close()

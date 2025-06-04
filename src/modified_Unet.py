@@ -342,6 +342,7 @@ class Model(nn.Module):
         h = self.norm_out(h)
         h = nonlinearity(h)
         h = self.conv_out(h)
+        h = torch.tanh(h)
         return h
 
     @property
